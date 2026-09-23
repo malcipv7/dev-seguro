@@ -44,7 +44,7 @@ Não é preciso ler o guia inteiro. Ache abaixo a linha que descreve o que o seu
 
 **Atalho para quem tem pressa:** antes de abrir o PR, passe só pelo Checklist de revisão de código no final. Se alguma resposta for "não", a seção correspondente explica o porquê e mostra o código corrigido.
 
-## Validação de entrada: a base de tudo
+<h2 id="validação-de-entrada-a-base-de-tudo">Validação de entrada: a base de tudo <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 **O que é:** conferir cada dado que chega de fora antes de usar. Tipo (é número?), formato (é e-mail? é UUID?), tamanho (até 100 caracteres?) e faixa (entre 1 e 1000?). O que não passa é rejeitado com 400, sem tentar "consertar".
 
@@ -127,7 +127,7 @@ if err := validate.Struct(in); err != nil { http.Error(w, "bad request", 400); r
 - String tem tamanho máximo; número tem faixa; enum tem lista fixa.
 - Dado lido do banco e renderizado ou concatenado passa pelo mesmo tratamento que dado de request.
 
-## SQL Injection
+<h2 id="sql-injection">SQL Injection <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 **O que é:** o dado do usuário vira parte do comando SQL em vez de ser tratado como valor. O atacante altera a lógica da query: lê tabelas que não deveria, ignora autenticação, apaga ou altera registros.
 
@@ -190,7 +190,7 @@ rows, err := db.Query("SELECT * FROM users WHERE email = ?", email)
 - Coluna, tabela e direção de ordenação vindas do usuário passam por lista de valores permitidos.
 - O usuário do banco usado pela aplicação não tem `DROP`, `FILE` ou acesso a outros schemas.
 
-## Path Traversal
+<h2 id="path-traversal">Path Traversal <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 **O que é:** o usuário controla parte de um caminho de arquivo e usa `../` para sair da pasta prevista. Resultado: leitura de `/etc/passwd`, `.env`, chaves privadas, código-fonte, ou escrita de arquivo em lugar arbitrário (upload que vira shell).
 
@@ -265,7 +265,7 @@ http.ServeFile(w, r, target)
 - Upload grava com nome gerado pela aplicação e extensão validada.
 - Bloqueio por blacklist de `../` sozinho é reprovado.
 
-## Rota sem autenticação
+<h2 id="rota-sem-autenticação">Rota sem autenticação <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 **O que é:** um endpoint que deveria exigir login responde para qualquer requisição. O front esconde o botão, mas a API está aberta. Quem chama a URL direto (curl, Burp, script) recebe o dado ou executa a ação.
 
@@ -338,7 +338,7 @@ http.ListenAndServe(":8080", handler)
 - Nenhuma rota de debug, admin ou interna exposta no mesmo listener da API pública.
 - Serviço interno exige credencial de serviço mesmo dentro da rede.
 
-## IDOR (Insecure Direct Object Reference)
+<h2 id="idor-insecure-direct-object-reference">IDOR (Insecure Direct Object Reference) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 **O que é:** o usuário está logado, mas troca o id na URL ou no body e acessa um objeto que não é dele. `GET /api/invoices/1042` vira `GET /api/invoices/1043` e devolve a fatura de outro cliente. É o erro de autorização mais comum em API e o mais fácil de explorar: não precisa de ferramenta, só de mudar um número.
 
@@ -412,7 +412,7 @@ row := db.QueryRow("SELECT * FROM invoices WHERE id = ? AND owner_id = ?", id, u
 - Update usa schema de campos permitidos; `role`, `status` de pagamento e similares não entram.
 - Existe teste que acessa o objeto de outro usuário e espera 404.
 
-## Command Injection
+<h2 id="command-injection">Command Injection <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 **O que é:** dado do usuário vira parte de um comando executado no sistema operacional. É o SQL Injection com o shell no lugar do banco. O atacante encadeia comandos com `;`, `&&`, `|` ou `$( )` e executa o que quiser com o usuário do processo. Resultado direto: RCE, execução remota de código no servidor.
 
@@ -477,7 +477,7 @@ O `--` antes do argumento impede que um valor começando com `-` seja lido como 
 - Chamada externa tem `timeout`.
 - Se existe lib nativa (Pillow, sharp, archive/zip), o binário não é chamado.
 
-## SSRF (Server-Side Request Forgery)
+<h2 id="ssrf-server-side-request-forgery">SSRF (Server-Side Request Forgery) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 **O que é:** o servidor faz uma requisição HTTP para uma URL que o usuário escolheu. O atacante aponta para endereços que só o servidor alcança: serviços internos (`http://db-admin:8080`), o próprio serviço Go interno sem auth, o endpoint de metadata da nuvem (`http://169.254.169.254/`, que entrega credenciais da instância) ou `localhost`.
 
@@ -579,7 +579,7 @@ func safeGet(raw string) (*http.Response, error) {
 - Timeout e limite de tamanho de resposta definidos.
 - Rede do container não alcança metadata da nuvem nem serviços que a feature não usa.
 
-## XSS no front (React)
+<h2 id="xss-no-front-react">XSS no front (React) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 **O que é:** dado de usuário renderizado como HTML ou JavaScript no navegador de outra pessoa. O atacante rouba sessão, faz requisições em nome da vítima ou altera a página.
 
@@ -632,7 +632,7 @@ const safeUrl = (u: string) => /^https?:\/\//i.test(u) ? u : "#";
 - Nenhum uso de `innerHTML`, `eval` ou `new Function` com dado externo.
 - CSP configurada no backend; sessão em cookie `HttpOnly`.
 
-## Falhas de serviços em containers
+<h2 id="falhas-de-serviços-em-containers">Falhas de serviços em containers <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 **O que é:** o código pode estar correto e o serviço ainda ser comprometido pela forma como roda. Container mal configurado transforma uma falha pequena na aplicação (RCE, path traversal, SSRF) em acesso ao host ou a outros serviços.
 
@@ -710,7 +710,7 @@ networks:
 - Imagem base fixada em versão suportada e escaneada no CI.
 - Serviço interno Go exige credencial mesmo sem porta publicada.
 
-## Segredos, configuração e dependências
+<h2 id="segredos-configuração-e-dependências">Segredos, configuração e dependências <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 Três problemas que não aparecem no código da feature, mas aparecem em quase todo incidente.
 
@@ -726,7 +726,7 @@ Três problemas que não aparecem no código da feature, mas aparecem em quase t
 
 **Log.** Nunca logar senha, token, cookie de sessão, número de cartão ou documento completo. Log com dado sensível vira vazamento quando o log é exportado ou lido por quem não deveria.
 
-## O que logar para o SOC enxergar o ataque
+<h2 id="o-que-logar-para-o-soc-enxergar-o-ataque">O que logar para o SOC enxergar o ataque <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 Tudo acima reduz a chance de exploração. Nada acima permite descobrir que alguém tentou. Isso é o log. O SOC só detecta o que a aplicação registra, e o `access.log` do proxy não diz quem estava logado nem por que a requisição foi negada.
 
@@ -768,7 +768,7 @@ JSON, uma linha por evento, `event` com nome fixo em `dominio.acao` (`auth.login
 - `request_id` é gerado na entrada e propagado para chamadas internas.
 - Nenhum campo sensível no log.
 
-## Como testar você mesmo antes do PR
+<h2 id="como-testar-você-mesmo-antes-do-pr">Como testar você mesmo antes do PR <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 O revisor confere o código. Quem confere o comportamento é você, e leva cinco minutos com o serviço rodando local.
 
@@ -852,7 +852,7 @@ Regra de bloqueio: severidade alta ou crítica trava o merge. Média vira coment
 - Pipeline verde inclui SAST, audit de dependência e scan de imagem.
 - Supressão de alerta tem justificativa ao lado.
 
-## Severidade: o que trava o deploy e o que vira ticket
+<h2 id="severidade-o-que-trava-o-deploy-e-o-que-vira-ticket">Severidade: o que trava o deploy e o que vira ticket <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
 
 Nem toda falha tem o mesmo peso. A escala abaixo é a régua para decidir na revisão e para priorizar o que o pentest ou o SOC reportar.
 
