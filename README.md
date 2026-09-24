@@ -9,7 +9,21 @@ Quase toda falha explorada em aplicação web nasce de um mesmo erro: confiar em
 
 **Por que importa para nós:** uma falha dessas em produção vira acesso indevido a dado de cliente, alteração de registro, execução de código no servidor ou queda de serviço. O custo de corrigir na revisão de código é minutos. O custo de corrigir depois de um incidente inclui investigação, comunicação, correção sob pressão e possível exposição de dados.
 
-**Como usar este documento:** cada falha tem quatro partes: o que é, como acontece (código vulnerável), como corrigir (código seguro por linguagem) e o que validar na revisão. A seção Checklist de PR no final resume tudo em perguntas objetivas. O documento cresce: novas falhas entram seguindo o mesmo formato.
+Este guia identifica padrões de risco. Nem todo padrão é uma falha: funcionalidades legítimas podem acionar os mesmos alertas. Quando isso acontecer, o caminho é alinhar entre dev e segurança os controles que mantêm a feature funcional e o ambiente protegido. O objetivo é segurança com contexto, não checklist cego.
+
+## Como usar este documento
+
+O documento tem duas partes. A primeira cobre falhas de código: cada uma com quatro partes (o que é, como acontece, código seguro por linguagem e o que validar na revisão). Use a tabela "Por onde começar" para achar a falha pelo trecho de código que você está escrevendo. A segunda parte cobre o que verificar antes de abrir o Pull Request: log de segurança, verificações práticas e o checklist final.
+
+O documento cresce: novas falhas entram seguindo o mesmo formato.
+
+<h3 id="fluxo-deste-documento">Fluxo deste documento</h3>
+
+| Etapa | O que fazer | Onde no documento |
+| ----- | ----------- | ----------------- |
+| 1 | Identifique o que o seu código faz e valide contra as falhas conhecidas | [Tabela de falhas (abaixo)](#por-onde-começar-mapa-por-trecho-de-código) |
+| 2 | Garanta que os eventos relevantes geram log estruturado | [Log de segurança](#log-de-segurança) |
+| 3 | Passe pelo checklist de revisão | [Checklist de revisão de código](#checklist-de-revisão-de-código) |
 
 ## Por onde começar: mapa por trecho de código
 
@@ -37,13 +51,10 @@ Não é preciso ler o guia inteiro. Ache abaixo a linha que descreve o que o seu
 | Grava ou confere senha de usuário                                | Hash fraco                      | Usa bcrypt ou argon2 da biblioteca padrão?                                         | [Segredos e configuração](#segredos-configuração-e-dependências)           |
 | Adiciona ou atualiza dependência                                 | Pacote vulnerável               | Lockfile atualizado e audit do CI sem severidade alta?                             | [Segredos e configuração](#segredos-configuração-e-dependências)           |
 | Escreve log                                                      | Vazamento em log                | O log não grava senha, token, cookie ou documento?                                 | [Segredos e configuração](#segredos-configuração-e-dependências)           |
-| Escreve handler de login, de erro 401/403/404 ou de validação    | Ataque invisível para o SOC     | Emite evento JSON nomeado com os campos base?                                      | [O que logar para o SOC](#o-que-logar-para-o-soc-enxergar-o-ataque)            |
-| Vai abrir o PR                                                   | Falha que o revisor não vai ver | Rodou os três curls e escreveu os testes 401 e 404?                                | [Como testar você mesmo](#como-testar-você-mesmo-antes-do-pr)            |
-| Não sabe se a falha encontrada trava o merge                     | Prioridade errada               | Consultou a tabela de severidade?                                                  | [Severidade](#severidade-o-que-trava-o-deploy-e-o-que-vira-ticket)                        |
 
-**Atalho para quem tem pressa:** antes de abrir o PR, passe só pelo Checklist de revisão de código no final. Se alguma resposta for "não", a seção correspondente explica o porquê e mostra o código corrigido.
+**Atalho para quem tem pressa:** siga as três etapas do [fluxo acima](#fluxo-deste-documento). Se quer entender o porquê de cada checagem, use a tabela de falhas para ir direto na seção.
 
-<h2 id="validação-de-entrada-a-base-de-tudo">Validação de entrada: a base de tudo <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="validação-de-entrada-a-base-de-tudo">Validação de entrada: a base de tudo <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 **O que é:** conferir cada dado que chega de fora antes de usar. Tipo (é número?), formato (é e-mail? é UUID?), tamanho (até 100 caracteres?) e faixa (entre 1 e 1000?). O que não passa é rejeitado com 400, sem tentar "consertar".
 
@@ -126,7 +137,7 @@ if err := validate.Struct(in); err != nil { http.Error(w, "bad request", 400); r
 - String tem tamanho máximo; número tem faixa; enum tem lista fixa.
 - Dado lido do banco e renderizado ou concatenado passa pelo mesmo tratamento que dado de request.
 
-<h2 id="sql-injection">SQL Injection <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="sql-injection">SQL Injection <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 **O que é:** o dado do usuário vira parte do comando SQL em vez de ser tratado como valor. O atacante altera a lógica da query: lê tabelas que não deveria, ignora autenticação, apaga ou altera registros.
 
@@ -189,7 +200,7 @@ rows, err := db.Query("SELECT * FROM users WHERE email = ?", email)
 - Coluna, tabela e direção de ordenação vindas do usuário passam por lista de valores permitidos.
 - O usuário do banco usado pela aplicação não tem `DROP`, `FILE` ou acesso a outros schemas.
 
-<h2 id="path-traversal">Path Traversal <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="path-traversal">Path Traversal <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 **O que é:** o usuário controla parte de um caminho de arquivo e usa `../` para sair da pasta prevista. Resultado: leitura de `/etc/passwd`, `.env`, chaves privadas, código-fonte, ou escrita de arquivo em lugar arbitrário (upload que vira shell).
 
@@ -255,7 +266,7 @@ if !strings.HasPrefix(target, uploadDir+string(os.PathSeparator)) {
 http.ServeFile(w, r, target)
 ```
 
-**Upload:** nunca usar o nome enviado pelo cliente para gravar em disco. Gerar nome próprio (UUID), validar extensão contra lista fixa, checar o tipo real do conteúdo, gravar fora da raiz web e nunca em pasta executável.
+**Upload:** nunca usar o nome enviado pelo cliente para gravar em disco. Gerar nome próprio (UUID), validar extensão contra lista fixa, checar o tipo real do conteúdo, gravar fora da raiz web e nunca em pasta executável. O nome original fica no banco, associado ao registro, e é devolvido ao usuário no momento do download pelo header `Content-Disposition`. O nome do cliente participa da experiência, nunca do caminho de arquivo.
 
 ### O que validar na revisão
 
@@ -264,7 +275,7 @@ http.ServeFile(w, r, target)
 - Upload grava com nome gerado pela aplicação e extensão validada.
 - Bloqueio por blacklist de `../` sozinho é reprovado.
 
-<h2 id="rota-sem-autenticação">Rota sem autenticação <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="rota-sem-autenticação">Rota sem autenticação <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 **O que é:** um endpoint que deveria exigir login responde para qualquer requisição. O front esconde o botão, mas a API está aberta. Quem chama a URL direto (curl, Burp, script) recebe o dado ou executa a ação.
 
@@ -337,7 +348,7 @@ http.ListenAndServe(":8080", handler)
 - Nenhuma rota de debug, admin ou interna exposta no mesmo listener da API pública.
 - Serviço interno exige credencial de serviço mesmo dentro da rede.
 
-<h2 id="idor-insecure-direct-object-reference">IDOR (Insecure Direct Object Reference) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="idor-insecure-direct-object-reference">IDOR (Insecure Direct Object Reference) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 **O que é:** o usuário está logado, mas troca o id na URL ou no body e acessa um objeto que não é dele. `GET /api/invoices/1042` vira `GET /api/invoices/1043` e devolve a fatura de outro cliente. É o erro de autorização mais comum em API e o mais fácil de explorar: não precisa de ferramenta, só de mudar um número.
 
@@ -411,7 +422,7 @@ row := db.QueryRow("SELECT * FROM invoices WHERE id = ? AND owner_id = ?", id, u
 - Update usa schema de campos permitidos; `role`, `status` de pagamento e similares não entram.
 - Existe teste que acessa o objeto de outro usuário e espera 404.
 
-<h2 id="command-injection">Command Injection <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="command-injection">Command Injection <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 **O que é:** dado do usuário vira parte de um comando executado no sistema operacional. É o SQL Injection com o shell no lugar do banco. O atacante encadeia comandos com `;`, `&&`, `|` ou `$( )` e executa o que quiser com o usuário do processo. Resultado direto: RCE, execução remota de código no servidor.
 
@@ -476,7 +487,7 @@ O `--` antes do argumento impede que um valor começando com `-` seja lido como 
 - Chamada externa tem `timeout`.
 - Se existe lib nativa (Pillow, sharp, archive/zip), o binário não é chamado.
 
-<h2 id="ssrf-server-side-request-forgery">SSRF (Server-Side Request Forgery) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="ssrf-server-side-request-forgery">SSRF (Server-Side Request Forgery) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 **O que é:** o servidor faz uma requisição HTTP para uma URL que o usuário escolheu. O atacante aponta para endereços que só o servidor alcança: serviços internos (`http://db-admin:8080`), o próprio serviço Go interno sem auth, o endpoint de metadata da nuvem (`http://169.254.169.254/`, que entrega credenciais da instância) ou `localhost`.
 
@@ -578,7 +589,7 @@ func safeGet(raw string) (*http.Response, error) {
 - Timeout e limite de tamanho de resposta definidos.
 - Rede do container não alcança metadata da nuvem nem serviços que a feature não usa.
 
-<h2 id="xss-no-front-react">XSS no front (React) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="xss-no-front-react">XSS no front (React) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 **O que é:** dado de usuário renderizado como HTML ou JavaScript no navegador de outra pessoa. O atacante rouba sessão, faz requisições em nome da vítima ou altera a página.
 
@@ -631,7 +642,7 @@ const safeUrl = (u: string) => /^https?:\/\//i.test(u) ? u : "#";
 - Nenhum uso de `innerHTML`, `eval` ou `new Function` com dado externo.
 - CSP configurada no backend; sessão em cookie `HttpOnly`.
 
-<h2 id="falhas-de-serviços-em-containers">Falhas de serviços em containers <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="falhas-de-serviços-em-containers">Falhas de serviços em containers <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 **O que é:** o código pode estar correto e o serviço ainda ser comprometido pela forma como roda. Container mal configurado transforma uma falha pequena na aplicação (RCE, path traversal, SSRF) em acesso ao host ou a outros serviços.
 
@@ -709,7 +720,7 @@ networks:
 - Imagem base fixada em versão suportada e escaneada no CI.
 - Serviço interno Go exige credencial mesmo sem porta publicada.
 
-<h2 id="segredos-configuração-e-dependências">Segredos, configuração e dependências <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="segredos-configuração-e-dependências">Segredos, configuração e dependências <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↑</a></h2>
 
 Três problemas que não aparecem no código da feature, mas aparecem em quase todo incidente.
 
@@ -725,9 +736,17 @@ Três problemas que não aparecem no código da feature, mas aparecem em quase t
 
 **Log.** Nunca logar senha, token, cookie de sessão, número de cartão ou documento completo. Log com dado sensível vira vazamento quando o log é exportado ou lido por quem não deveria.
 
-<h2 id="o-que-logar-para-o-soc-enxergar-o-ataque">O que logar para o SOC enxergar o ataque <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+---
 
-Tudo acima reduz a chance de exploração. Nada acima permite descobrir que alguém tentou. Isso é o log. O SOC só detecta o que a aplicação registra, e o `access.log` do proxy não diz quem estava logado nem por que a requisição foi negada.
+## Antes do Pull Request
+
+As seções acima cobrem as falhas no código. Daqui em diante o foco é o que verificar antes de abrir o Pull Request: se a aplicação registra os eventos certos para auditoria, as verificações práticas que você pode rodar, a régua de severidade e o checklist final.
+
+<h2 id="log-de-segurança">Log de segurança: o que registrar e por quê <a href="#fluxo-deste-documento" title="Voltar ao fluxo">↑</a></h2>
+
+Tudo acima reduz a chance de exploração. Nada acima permite descobrir que alguém tentou. Isso é o log.
+
+Log estruturado é requisito para auditoria interna e externa. Sem ele, um incidente que poderia ser resolvido em minutos vira semanas de reconstrução. A equipe de segurança (SOC) é um dos consumidores, mas não o único: qualquer investigação, auditoria de compliance ou pedido de evidência de controle depende do que a aplicação registrou. O `access.log` do proxy não diz quem estava logado nem por que a requisição foi negada.
 
 **No dia a dia do dev:** é o mesmo `logger.info` que você já usa para debugar, só que com campos fixos e nos eventos certos. Custo: uma linha por evento. Ganho: a diferença entre "descobrimos em 10 minutos" e "descobrimos no vazamento".
 
@@ -767,11 +786,13 @@ JSON, uma linha por evento, `event` com nome fixo em `dominio.acao` (`auth.login
 - `request_id` é gerado na entrada e propagado para chamadas internas.
 - Nenhum campo sensível no log.
 
-<h2 id="como-testar-você-mesmo-antes-do-pr">Como testar você mesmo antes do PR <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="verificações-e-ferramentas">Verificações e ferramentas <a href="#fluxo-deste-documento" title="Voltar ao fluxo">↑</a></h2>
 
-O revisor confere o código. Quem confere o comportamento é você, e leva cinco minutos com o serviço rodando local.
+Depois de validar o código contra as seções de falha e garantir o log, estas verificações ajudam a confirmar o comportamento antes de abrir o Pull Request.
 
 ### Três curls que pegam a maioria dos problemas
+
+Com o serviço rodando local, leva cinco minutos:
 
 ```bash
 # 1. Rota sem auth: tem que voltar 401
@@ -786,6 +807,10 @@ curl -i "http://localhost:8000/api/download?file=..%2F..%2F.env"
 ```
 
 500 em qualquer um significa que o dado chegou onde não devia e quebrou algo no caminho. É o sinal de que a validação não existe.
+
+### Revisão com apoio de LLM
+
+Você revisou o código e entende o que cada falha faz. Uma LLM (ChatGPT, Claude, Copilot) ajuda a pegar o que o olho cansado deixa passar, não substitui a leitura. Envie o trecho alterado com a pergunta específica do checklist: "Este handler recebe id da URL. A query filtra por owner_id do usuário logado?" Se você não entende a pergunta que está fazendo, volte para a seção da falha antes de confiar na resposta.
 
 ### Teste automatizado: o par 401 e 404
 
@@ -829,7 +854,7 @@ func TestInvoiceRequiresAuth(t *testing.T) {
 
 ### Ferramentas no CI
 
-O que roda em todo PR, sem depender de alguém lembrar:
+O que roda em todo Pull Request, sem depender de alguém lembrar:
 
 |Linguagem|Ferramenta|O que pega|
 |---|---|---|
@@ -843,32 +868,34 @@ O que roda em todo PR, sem depender de alguém lembrar:
 |Repositório|gitleaks|segredo commitado, também no histórico|
 |Imagem|trivy|CVE na base e nas libs do sistema, `USER root`, segredo em layer|
 
-Regra de bloqueio: severidade alta ou crítica trava o merge. Média vira comentário no PR. Falso positivo se marca com anotação no código (`# nosec`, `// #nosec`, `// nosemgrep`) e uma linha explicando o porquê, nunca desligando a regra inteira.
+Regra de bloqueio: severidade alta ou crítica trava o merge. Média vira comentário no Pull Request. Falso positivo se marca com anotação no código (`# nosec`, `// #nosec`, `// nosemgrep`) e uma linha explicando o porquê, nunca desligando a regra inteira.
 
 ### O que validar na revisão
 
-- PR de rota nova inclui os testes 401 e 404.
+- Pull Request de rota nova inclui os testes 401 e 404.
 - Pipeline verde inclui SAST, audit de dependência e scan de imagem.
 - Supressão de alerta tem justificativa ao lado.
 
-<h2 id="severidade-o-que-trava-o-deploy-e-o-que-vira-ticket">Severidade: o que trava o deploy e o que vira ticket <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela de navegação">↩</a></h2>
+<h2 id="severidade">Severidade <a href="#fluxo-deste-documento" title="Voltar ao fluxo">↑</a></h2>
 
-Nem toda falha tem o mesmo peso. A escala abaixo é a régua para decidir na revisão e para priorizar o que o pentest ou o SOC reportar.
+Nem toda falha tem o mesmo peso. A escala abaixo é a régua para a equipe de segurança classificar o que for reportado, e para o dev ter visibilidade do impacto.
 
-|Severidade|Falhas típicas|O que acontece|
+A tabela classifica o risco do padrão isolado. Quando a engenharia por trás de uma feature acionar um padrão que o guia aponta como risco, o dev sinaliza à equipe de segurança o motivo técnico da implementação. Os dois times avaliam juntos se cabe rever a abordagem, aplicar os controles da seção correspondente, ou ambos. O guia orienta essa conversa, não substitui ela.
+
+|Severidade|Falhas típicas|Ação|
 |---|---|---|
-|Crítica|SQL Injection, Command Injection, rota administrativa sem auth, segredo de produção no repositório, `docker.sock` montado|Trava o merge. Se já está em produção, corrige hoje, com hotfix fora do ciclo normal|
-|Alta|IDOR, Path Traversal, SSRF com acesso a rede interna, upload sem validação, senha em hash fraco|Trava o merge. Em produção, corrige na sprint corrente com prioridade sobre feature|
-|Média|XSS, erro verboso, rota comum sem auth em dado não sensível, container root sem outros agravantes, dependência com CVE alta sem exploit conhecido|Merge com ticket aberto e prazo de duas semanas|
+|Crítica|SQL Injection, Command Injection, rota administrativa sem auth, segredo de produção no repositório, `docker.sock` montado|Correção imediata. Se já está em produção, hotfix fora do ciclo normal|
+|Alta|IDOR, Path Traversal, SSRF com acesso a rede interna, upload sem validação, senha em hash fraco|Correção na sprint corrente com prioridade sobre feature|
+|Média|XSS, erro verboso, rota comum sem auth em dado não sensível, container root sem outros agravantes, dependência com CVE alta sem exploit conhecido|Ticket aberto com prazo de duas semanas|
 |Baixa|Log sem `request_id`, falta de rate limit em rota de leitura, header de segurança ausente|Ticket no backlog, entra no próximo ciclo de melhoria|
 
 **Dois fatores sobem a severidade:** a rota é pública sem login, ou o dado envolvido é pessoal, financeiro ou credencial. Um XSS em painel interno é médio; o mesmo XSS na página de login pública é alto.
 
-**Exceção precisa de justificativa escrita.** Se um ponto do checklist não pode ser atendido (raw SQL por performance, `shell=True` em script legado), o PR descreve o motivo, qual controle compensa (allowlist, isolamento, timeout) e quem aprovou. Sem isso, o revisor reprova.
+**Exceção precisa de justificativa escrita.** Se um ponto do checklist não pode ser atendido (raw SQL por performance, `shell=True` em script legado), o Pull Request descreve o motivo, qual controle compensa (allowlist, isolamento, timeout) e quem aprovou. Sem isso, o revisor reprova.
 
-## Checklist de revisão de código (PR)
+<h2 id="checklist-de-revisão-de-código">Checklist de revisão de código <a href="#fluxo-deste-documento" title="Voltar ao fluxo">↑</a></h2>
 
-Perguntas objetivas para o revisor. Uma resposta "não" trava o merge até corrigir ou justificar no PR.
+Perguntas objetivas para o revisor. Uma resposta "não" exige correção ou justificativa no Pull Request.
 
 **Entrada de dados**
 
@@ -939,7 +966,7 @@ Perguntas objetivas para o revisor. Uma resposta "não" trava o merge até corri
 
 **Como uma falha nova entra:** com as mesmas partes das existentes (o que é, no dia a dia do dev, como acontece, código vulnerável, código seguro, o que validar), uma linha na tabela "Por onde começar", um item no checklist e, se couber, um evento na seção de log. Incidente real vira exemplo com o dado sensível removido.
 
-**Como pedir exceção:** descrever no PR o ponto do checklist que não será atendido, o motivo técnico, o controle que compensa e quem aprovou. A exceção fica registrada no PR e vale só para aquele trecho.
+**Como pedir exceção:** descrever no Pull Request o ponto do checklist que não será atendido, o motivo técnico, o controle que compensa e quem aprovou. A exceção fica registrada no Pull Request e vale só para aquele trecho.
 
 **Versão:** o histórico é o do próprio documento. Mudança de conteúdo (falha nova, correção de exemplo) atualiza a data no topo; ajuste de texto não.
 
@@ -960,6 +987,7 @@ Perguntas objetivas para o revisor. Uma resposta "não" trava o merge até corri
 | Metadata da nuvem          | Endpoint interno (`169.254.169.254`) que entrega credenciais da instância; alvo clássico de SSRF |
 | mTLS                       | TLS onde cliente e servidor apresentam certificado; usado para autenticar serviço com serviço    |
 | Placeholder                | O `?` ou `%s` da query parametrizada; marca onde o driver vai inserir o dado                     |
+| Pull Request               | Solicitação de merge de código em um repositório; o momento de revisão antes do código entrar na branch principal |
 | Rate limit                 | Limite de requisições por IP ou usuário em um período                                            |
 | RCE                        | Remote Code Execution, executar código arbitrário no servidor                                    |
 | SAST                       | Análise estática do código-fonte em busca de padrões inseguros (bandit, gosec, semgrep)          |
