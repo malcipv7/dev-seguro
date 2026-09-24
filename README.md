@@ -1,6 +1,5 @@
 # Dicas de Desenvolvimento Seguro
 
-Versão: 2026-09-18
 
 ## Por que programar de forma segura
 
